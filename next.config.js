@@ -14,10 +14,7 @@ const nextConfig = {
       }
     ],
   },
-  experimental: {
-    esmExternals: 'loose',
-    serverComponentsExternalPackages: ['@vercel/postgres']
-  },
+  serverExternalPackages: ['@vercel/postgres'],
   webpack: (config) => {
     config.resolve.fallback = { fs: false, path: false };
     return config;

@@ -1,1 +1,117 @@
-import { Hero, HeroFilter, ApiResponse } from '@/types';const API_BASE_URL = '/api/heroes';export async function getHeroes(filters?: Partial<HeroFilter>): Promise<Hero[]> {  try {    const queryParams = new URLSearchParams();    if (filters) {      if (filters.region) queryParams.append('region', filters.region);      if (filters.award) queryParams.append('award', filters.award);      if (filters.rank) queryParams.append('rank', filters.rank);      if (filters.yearFrom) queryParams.append('yearFrom', filters.yearFrom);      if (filters.yearTo) queryParams.append('yearTo', filters.yearTo);      if (filters.searchQuery) queryParams.append('searchQuery', filters.searchQuery);    }    const url = `${API_BASE_URL}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;    const response = await fetch(url);    if (!response.ok) {      throw new Error(`Ошибка: ${response.status}`);    }    const result: ApiResponse<Hero[]> = await response.json();    if (!result.success) {      throw new Error(result.message || 'Произошла ошибка при получении списка героев');    }    return result.data;  } catch (error) {    console.error('Ошибка при получении списка героев:', error);    return [];  }}export async function getHeroById(id: number): Promise<Hero | null> {  try {    const response = await fetch(`${API_BASE_URL}/${id}`);    if (!response.ok) {      if (response.status === 404) {        return null;      }      throw new Error(`Ошибка: ${response.status}`);    }    const result: ApiResponse<Hero> = await response.json();    if (!result.success) {      throw new Error(result.message || 'Произошла ошибка при получении данных о герое');    }    return result.data;  } catch (error) {    console.error('Ошибка при получении данных о герое:', error);    return null;  }}export async function addHero(heroData: Omit<Hero, 'id'>): Promise<Hero> {  try {    const response = await fetch(API_BASE_URL, {      method: 'POST',      headers: {        'Content-Type': 'application/json',      },      body: JSON.stringify(heroData),    });    if (!response.ok) {      throw new Error(`Ошибка: ${response.status}`);    }    const result: ApiResponse<Hero> = await response.json();    if (!result.success) {      throw new Error(result.message || 'Произошла ошибка при добавлении героя');    }    return result.data;  } catch (error) {    console.error('Ошибка при добавлении героя:', error);    throw error;  }}export async function updateHero(id: number, heroData: Partial<Omit<Hero, 'id'>>): Promise<Hero> {  try {    const response = await fetch(`${API_BASE_URL}/${id}`, {      method: 'PUT',      headers: {        'Content-Type': 'application/json',      },      body: JSON.stringify(heroData),    });    if (!response.ok) {      throw new Error(`Ошибка: ${response.status}`);    }    const result: ApiResponse<Hero> = await response.json();    if (!result.success) {      throw new Error(result.message || 'Произошла ошибка при обновлении героя');    }    return result.data;  } catch (error) {    console.error('Ошибка при обновлении героя:', error);    throw error;  }}export async function deleteHero(id: number): Promise<boolean> {  try {    const response = await fetch(`${API_BASE_URL}/${id}`, {      method: 'DELETE',    });    if (!response.ok) {      throw new Error(`Ошибка: ${response.status}`);    }    const result: ApiResponse<null> = await response.json();    if (!result.success) {      throw new Error(result.message || 'Произошла ошибка при удалении героя');    }    return true;  } catch (error) {    console.error('Ошибка при удалении героя:', error);    return false;  }} 
+import { Hero, HeroFilter, ApiResponse } from '@/types';
+const API_BASE_URL = '/api/heroes';
+
+/**
+ * Получение списка героев с фильтрацией
+ */
+export async function getHeroes(params?: {
+  search?: string;
+  region?: string;
+  rank?: string;
+  limit?: number;
+}) {
+  const urlParams = new URLSearchParams();
+  
+  if (params?.search) urlParams.append('search', params.search);
+  if (params?.region) urlParams.append('region', params.region);
+  if (params?.rank) urlParams.append('rank', params.rank);
+  if (params?.limit) urlParams.append('limit', params.limit.toString());
+  
+  const queryString = urlParams.toString();
+  const url = `/api/heroes${queryString ? '?' + queryString : ''}`;
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error('Ошибка при получении данных о героях');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Ошибка при получении героев:', error);
+    throw error;
+  }
+}
+
+/**
+ * Получение героя по ID
+ */
+export async function getHeroById(id: string) {
+  try {
+    const response = await fetch(`/api/heroes/${id}`);
+    if (!response.ok) {
+      throw new Error('Герой не найден');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error(`Ошибка при получении героя с ID ${id}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Добавление нового героя
+ */
+export async function addHero(heroData: Partial<Hero>) {
+  try {
+    const response = await fetch('/api/heroes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(heroData),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Ошибка при добавлении героя');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Ошибка при добавлении героя:', error);
+    throw error;
+  }
+}
+
+/**
+ * Обновление данных о герое
+ */
+export async function updateHero(id: string, heroData: Partial<Hero>) {
+  try {
+    const response = await fetch(`/api/heroes/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(heroData),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Ошибка при обновлении данных о герое');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error(`Ошибка при обновлении героя с ID ${id}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Удаление героя
+ */
+export async function deleteHero(id: string) {
+  try {
+    const response = await fetch(`/api/heroes/${id}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.ok) {
+      throw new Error('Ошибка при удалении героя');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error(`Ошибка при удалении героя с ID ${id}:`, error);
+    throw error;
+  }
+} 
