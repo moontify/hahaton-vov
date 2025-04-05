@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function seedDatabase() {
+export async function seedDatabase() {
   const heroes = [
     {
       name: 'Жуков Георгий Константинович',

@@ -1,5 +1,4 @@
-import { Hero, HeroFilter, ApiResponse } from '@/types';
-const API_BASE_URL = '/api/heroes';
+import { Hero } from '@/types';
 
 /**
  * Получение списка героев с фильтрацией

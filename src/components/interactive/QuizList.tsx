@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FaPlay, FaCheck, FaTimes } from 'react-icons/fa';
+import { FaPlay } from 'react-icons/fa';
 
 const quizzes = [
   {
