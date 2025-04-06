@@ -331,8 +331,4 @@ GET /api/init-db?key=YOUR_ADMIN_API_KEY&seed=true  // С тестовыми да
 [![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/nam0er1)
 [![GitHub Issues](https://img.shields.io/badge/GitHub-Issues-FAC151?style=for-the-badge&logo=github&logoColor=white)](https://github.com/moontify/hahaton-vov/issues)
 
----
 
-<div align="center">
-  <sub>Проект разработан с ❤️ для сохранения памяти о Великой Отечественной Войне и её героях</sub>
-</div>
