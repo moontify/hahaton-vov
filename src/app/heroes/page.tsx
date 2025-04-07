@@ -9,9 +9,58 @@ export const metadata = {
   description: 'Информация о героях Великой Отечественной Войны. Поиск по региону и населенному пункту. Возможность добавить информацию о своих родственниках-участниках войны.',
 };
 
+// Скрипт для проверки localStorage
+const HeroesPageScript = () => {
+  return (
+    <script
+      dangerouslySetInnerHTML={{
+        __html: `
+          try {
+            // Проверяем localStorage на наличие героев
+            const storedHeroes = localStorage.getItem('heroes');
+            if (storedHeroes) {
+              const heroes = JSON.parse(storedHeroes);
+              
+              // Проверяем, есть ли героев с id > 5 (добавленные пользователем)
+              const userAddedHeroes = heroes.filter(hero => parseInt(hero.id) > 5);
+              if (userAddedHeroes.length > 0) {
+                
+                // Добавляем индикатор на страницу
+                const indicator = document.createElement('div');
+                indicator.style.position = 'fixed';
+                indicator.style.bottom = '20px';
+                indicator.style.right = '20px';
+                indicator.style.background = '#fbbf24';
+                indicator.style.color = '#1f2937';
+                indicator.style.padding = '10px 20px';
+                indicator.style.borderRadius = '8px';
+                indicator.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+                indicator.style.zIndex = '9999';
+                indicator.style.fontWeight = 'bold';
+                indicator.textContent = 'Герои загружены успешно!';
+                
+                document.body.appendChild(indicator);
+                
+                // Убираем индикатор через 5 секунд
+                setTimeout(() => {
+                  indicator.remove();
+                }, 5000);
+              }
+            }
+          } catch (error) {
+            console.error('Ошибка при проверке героев в localStorage:', error);
+          }
+        `
+      }}
+    />
+  );
+};
+
 export default function HeroesPage() {
   return (
     <div className="pt-20">
+      <HeroesPageScript />
+      
       <PageHeader 
         title="Галерея героев" 
         description="Истории о подвигах и доблести защитников Отечества"
@@ -19,6 +68,28 @@ export default function HeroesPage() {
       />
       
       <div className="container-custom mt-8">
+        <div className="bg-amber-950/30 border border-amber-900/50 rounded-lg p-4 mb-8 flex items-start gap-4">
+          <div className="text-amber-500 pt-1">
+            <FaSync size={20} />
+          </div>
+          <div>
+            <h3 className="text-amber-400 font-bold mb-1">Важно: Обновление информации</h3>
+            <p className="text-gray-300 text-sm mb-1">
+              После добавления героя необходимо <strong className="text-white bg-amber-700 px-2 py-0.5 rounded">обновить страницу</strong>, чтобы увидеть добавленную информацию в галерее.
+              Это требуется только в демо-версии сайта.
+            </p>
+            <p className="text-amber-500/80 text-xs">
+              В полной версии сайта информация будет обновляться автоматически после успешного добавления.
+            </p>
+            <a 
+              href="/heroes" 
+              className="mt-2 bg-amber-700 hover:bg-amber-600 text-white px-4 py-1 rounded-md text-sm flex items-center gap-2 inline-block w-fit"
+            >
+              <FaSync size={14} /> Обновить страницу сейчас
+            </a>
+          </div>
+        </div>
+        
         <div className="bg-blue-950/30 border border-blue-900/50 rounded-lg p-4 mb-8 flex items-start gap-4">
           <div className="text-blue-500 pt-1">
             <FaUserShield size={20} />

@@ -1,6 +1,7 @@
 'use client';
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import { FaUpload, FaSave, FaUser, FaMedal, FaRegCalendarAlt, FaMapMarkerAlt, FaStar, FaCheck } from 'react-icons/fa';
 import { addHero } from '@/api/heroesApi';
 import { HeroFormData } from '@/types';
@@ -59,17 +60,27 @@ export default function HeroesAddForm() {
       console.log('Отправка данных о герое:', formData);
       
       // Подготовка данных
+      const awards = formData.awards
+        .split(',')
+        .map(award => award.trim())
+        .filter(award => award.length > 0);
+      
+      // Определяем URL фотографии
+      let photoUrl = '/images/heroes/placeholder.jpg';
+      
+      if (formData.photo && photoPreview) {
+        // Используем photoPreview, который уже содержит data URL
+        photoUrl = photoPreview;
+      }
+      
       const heroData = {
         name: formData.fullName.trim(),
         rank: formData.rank,
         region: formData.region,
         description: formData.description,
         years: `${formData.birthYear}-${formData.deathYear || 'наст. время'}`,
-        awards: formData.awards
-          .split(',')
-          .map(award => award.trim())
-          .filter(award => award.length > 0),
-        photo: formData.photo ? URL.createObjectURL(formData.photo) : '/images/heroes/placeholder.jpg'
+        awards,
+        photo: photoUrl
       };
       
       console.log('Форматированные данные для API:', heroData);
@@ -403,10 +414,11 @@ export default function HeroesAddForm() {
                 <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-600 rounded-lg p-4 cursor-pointer hover:border-primary transition-colors bg-gray-800/50 overflow-hidden">
                   {photoPreview ? (
                     <div className="relative w-full h-48 mb-2">
-                      <img 
+                      <Image 
                         src={photoPreview}
                         alt="Предпросмотр" 
-                        className="w-full h-full object-contain"
+                        fill
+                        className="object-contain"
                       />
                       <button
                         type="button"

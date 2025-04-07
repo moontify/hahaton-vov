@@ -1,5 +1,8 @@
+'use client';
+import React from 'react';
 import Link from 'next/link';
-import { FaVk, FaTelegram, FaGithub } from 'react-icons/fa';
+import { FaVk, FaTelegram, FaGithub, FaHeart } from 'react-icons/fa';
+
 export default function Footer() {
   const currentYear = new Date().getFullYear();
   return (
@@ -37,9 +40,9 @@ export default function Footer() {
             <h3 className="text-xl font-bold mb-4">Разделы</h3>
             <ul className="space-y-2">
               <li>
-                <a href="/" className="text-muted-foreground hover:text-accent">
+                <Link href="/" className="text-muted-foreground hover:text-accent">
                   Главная
-                </a>
+                </Link>
               </li>
               <li>
                 <Link href="/history" className="text-muted-foreground hover:text-accent">

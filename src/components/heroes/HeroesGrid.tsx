@@ -49,6 +49,10 @@ const HeroesGrid: React.FC = () => {
       }
     }
   };
+
+  // Функция для проверки, является ли URL data URL
+  const isDataUrl = (url: string) => url.startsWith('data:');
+
   // Для демонстрационной версии считаем, что герои с id > 5 были добавлены текущим пользователем
   const isUserAddedHero = (heroId: string) => parseInt(heroId) > 5;
 
@@ -61,6 +65,12 @@ const HeroesGrid: React.FC = () => {
         <p className="text-gray-300">
           Найдено героев: <span className="font-bold text-amber-500 text-lg">{heroes.length}</span>
         </p>
+        <div className="mt-4 p-3 bg-amber-900/20 border border-amber-700/30 rounded-lg">
+          <p className="text-amber-400 text-sm">
+            <strong>Демо-режим:</strong> Данные о героях загружаются из локального хранилища браузера.
+            В полной версии информация будет храниться в базе данных проекта.
+          </p>
+        </div>
       </div>
       
       {error && (
@@ -113,10 +123,11 @@ const HeroesGrid: React.FC = () => {
                   <div className="relative w-full h-full group">
                     {hero.photo ? (
                       <Image 
-                        src={hero.photo !== '/images/heroes/placeholder.jpg' ? hero.photo : 'https://images.unsplash.com/photo-1590090040957-3a33ca95013a?q=80&w=987&auto=format&fit=crop'}
+                        src={isDataUrl(hero.photo) ? hero.photo : (hero.photo !== '/images/heroes/placeholder.jpg' ? hero.photo : 'https://images.unsplash.com/photo-1590090040957-3a33ca95013a?q=80&w=987&auto=format&fit=crop')}
                         alt={hero.name} 
                         fill
                         className="object-cover transition-transform duration-700 group-hover:scale-110"
+                        unoptimized={isDataUrl(hero.photo)} // Не оптимизировать data URL
                       />
                     ) : (
                       <div className="w-full h-full bg-gray-700 flex items-center justify-center">
@@ -156,9 +167,20 @@ const HeroesGrid: React.FC = () => {
           ) : (
             <div className="col-span-full text-center py-16 bg-gray-800/50 rounded-xl border border-gray-700/30">
               <p className="text-gray-400 text-lg mb-2">Героев по заданным критериям не найдено</p>
-              <p className="text-amber-500/70 text-sm">
+              <p className="text-amber-500/70 text-sm mb-4">
                 Вы можете добавить информацию о своем родственнике-герое, используя форму ниже
               </p>
+              <div className="max-w-md mx-auto p-4 bg-red-900/20 border border-red-800/30 rounded-lg mt-4">
+                <p className="text-red-300 text-sm">
+                  <strong>Важно:</strong> После добавления героя необходимо обновить страницу, чтобы увидеть его в галерее. 
+                  Если вы уже добавили информацию, и не видите её, нажмите <button 
+                    onClick={() => window.location.reload()} 
+                    className="underline text-red-400 hover:text-red-300"
+                  >
+                    обновить страницу
+                  </button>
+                </p>
+              </div>
             </div>
           )}
         </motion.div>

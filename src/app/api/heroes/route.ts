@@ -103,15 +103,23 @@ export async function GET(request: NextRequest) {
     // Фильтрация по годам
     if (yearFrom) {
       heroes = heroes.filter(hero => {
-        const birthYear = parseInt(hero.years.split('-')[0]);
-        return birthYear >= parseInt(yearFrom);
+        try {
+          const birthYear = parseInt(hero.years.split('-')[0]);
+          return birthYear >= parseInt(yearFrom);
+        } catch (e) {
+          return true;
+        }
       });
     }
     
     if (yearTo) {
       heroes = heroes.filter(hero => {
-        const birthYear = parseInt(hero.years.split('-')[0]);
-        return birthYear <= parseInt(yearTo);
+        try {
+          const birthYear = parseInt(hero.years.split('-')[0]);
+          return birthYear <= parseInt(yearTo);
+        } catch (e) {
+          return true;
+        }
       });
     }
     
@@ -132,8 +140,8 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * GET /api/heroes/[id]
- * Возвращает информацию о герое по ID
+ * POST /api/heroes
+ * Добавляет нового героя
  */
 export async function POST(request: NextRequest) {
   try {
