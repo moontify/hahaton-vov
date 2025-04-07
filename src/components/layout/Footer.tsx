@@ -37,9 +37,9 @@ export default function Footer() {
             <h3 className="text-xl font-bold mb-4">Разделы</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/" className="text-muted-foreground hover:text-accent">
+                <a href="/" className="text-muted-foreground hover:text-accent">
                   Главная
-                </Link>
+                </a>
               </li>
               <li>
                 <Link href="/history" className="text-muted-foreground hover:text-accent">

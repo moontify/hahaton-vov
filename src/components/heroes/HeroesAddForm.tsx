@@ -46,27 +46,55 @@ export default function HeroesAddForm() {
   };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Проверка обязательных полей
+    if (!formData.fullName || !formData.birthYear || !formData.rank) {
+      alert("Пожалуйста, заполните все обязательные поля");
+      return;
+    }
+    
     setIsSubmitting(true);
+    
     try {
+      console.log('Отправка данных о герое:', formData);
+      
+      // Подготовка данных
       const heroData = {
-        name: formData.fullName,
+        name: formData.fullName.trim(),
         rank: formData.rank,
         region: formData.region,
         description: formData.description,
         years: `${formData.birthYear}-${formData.deathYear || 'наст. время'}`,
-        awards: formData.awards.split(',').map(award => award.trim()),
+        awards: formData.awards
+          .split(',')
+          .map(award => award.trim())
+          .filter(award => award.length > 0),
         photo: formData.photo ? URL.createObjectURL(formData.photo) : '/images/heroes/placeholder.jpg'
       };
-      await addHero(heroData);
+      
+      console.log('Форматированные данные для API:', heroData);
+      
+      // Отправка данных
+      const result = await addHero(heroData);
+      console.log('Результат добавления героя:', result);
+      
       setSubmitStatus('success');
       setFormData(initialFormData);
       setPhotoPreview(null);
+      
+      // Обновить localStorage вручную для проверки
+      try {
+        const heroes = JSON.parse(localStorage.getItem('heroes') || '[]');
+        console.log('Текущие герои в localStorage:', heroes.length);
+      } catch (err) {
+        console.error('Ошибка при проверке localStorage:', err);
+      }
     } catch (error) {
-      setSubmitStatus('error');
       console.error('Ошибка при отправке данных:', error);
+      setSubmitStatus('error');
     } finally {
       setIsSubmitting(false);
-      setTimeout(() => setSubmitStatus('idle'), 5000);
+      setTimeout(() => setSubmitStatus('idle'), 10000); // Увеличим время показа сообщения об успешном добавлении
     }
   };
   const ranks = [
@@ -199,26 +227,42 @@ export default function HeroesAddForm() {
           <motion.div
             initial={{ scale: 0 }}
             animate={{ 
-              scale: [0, 1.2, 1],
-              rotate: [0, 10, 0]
+              scale: 1, 
+              transition: { delay: 0.2, type: "spring", stiffness: 200 }
             }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="w-20 h-20 rounded-full bg-gradient-to-r from-green-600 to-green-400 flex items-center justify-center mx-auto mb-6"
+            className="mb-6 text-green-300 flex justify-center"
           >
-            <FaCheck className="text-white" size={32} />
+            <FaCheck size={60} />
           </motion.div>
-          <h3 className="text-2xl font-bold mb-4 text-white">Данные успешно отправлены</h3>
-          <p className="text-gray-200 mb-6">
-            Благодарим вас за сохранение исторической памяти! Информация о вашем родственнике будет опубликована после проверки модератором.
+          <h3 className="text-2xl font-bold text-white mb-4">Герой успешно добавлен!</h3>
+          <p className="text-green-200 mb-4">
+            Информация о герое сохранена в локальном хранилище вашего браузера.
           </p>
-          <motion.button
-            className="bg-gradient-to-r from-primary to-primary-light text-white px-8 py-3 rounded-full shadow-lg font-semibold"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setSubmitStatus('idle')}
-          >
-            Добавить еще одного героя
-          </motion.button>
+          <div className="p-4 bg-blue-900/30 border border-blue-800/30 rounded-lg mb-4">
+            <p className="text-blue-300 text-sm">
+              <strong>Важно:</strong> Добавленный герой отображается только в вашем браузере. 
+              В полной версии приложения все добавленные герои будут проходить модерацию перед публикацией в общей галерее.
+            </p>
+          </div>
+          <div className="p-4 bg-yellow-900/30 rounded-lg mb-4">
+            <p className="text-amber-300 text-sm">
+              <strong>Примечание:</strong> Это временная демо-версия. В настоящей версии данные будут сохраняться в базе данных проекта.
+            </p>
+          </div>
+          <div className="flex flex-col md:flex-row gap-4 justify-center">
+            <button 
+              onClick={() => setSubmitStatus('idle')}
+              className="bg-green-700 hover:bg-green-600 text-white px-6 py-2 rounded-md transition-colors duration-300"
+            >
+              Добавить еще героя
+            </button>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-blue-700 hover:bg-blue-600 text-white px-6 py-2 rounded-md transition-colors duration-300"
+            >
+              Обновить страницу и увидеть героя
+            </button>
+          </div>
         </motion.div>
       ) : (
         <motion.form 

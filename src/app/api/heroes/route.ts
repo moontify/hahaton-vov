@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/mockDb';
 import { Hero } from '@/types';
 
 // Временные данные для примера
@@ -33,81 +32,95 @@ const mockHeroes: Hero[] = [
     years: '1918-2001',
     photo: '/images/heroes/hero3.jpg',
     awards: ['Орден Красного Знамени', 'Медаль За оборону Сталинграда', 'Орден Ленина']
+  },
+  {
+    id: '4',
+    name: 'Соколов Александр Васильевич',
+    rank: 'Сержант',
+    region: 'Курская область',
+    description: 'Командир танкового экипажа, участник Курской битвы. Уничтожил несколько немецких танков и спас своих товарищей из горящей машины.',
+    years: '1922-1999',
+    photo: '/images/heroes/hero4.jpg',
+    awards: ['Орден Славы III степени', 'Медаль За отвагу']
+  },
+  {
+    id: '5',
+    name: 'Козлов Дмитрий Николаевич',
+    rank: 'Лейтенант',
+    region: 'Белгородская область',
+    description: 'Командир стрелкового взвода, проявил героизм при освобождении населенных пунктов Белгородской области.',
+    years: '1920-1943',
+    photo: '/images/heroes/hero5.jpg',
+    awards: ['Орден Красного Знамени', 'Медаль За отвагу']
   }
 ];
 
+/**
+ * GET /api/heroes
+ * Возвращает список героев с фильтрацией
+ */
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const search = searchParams.get('search') || '';
   const region = searchParams.get('region') || '';
   const rank = searchParams.get('rank') || '';
+  const award = searchParams.get('award') || '';
+  const yearFrom = searchParams.get('yearFrom') || '';
+  const yearTo = searchParams.get('yearTo') || '';
   const limit = parseInt(searchParams.get('limit') || '100');
 
   try {
-    let heroes;
+    // Используем моковые данные с фильтрацией
+    let heroes = [...mockHeroes];
     
-    // Если у нас есть доступ к базе данных, выполняем запрос к ней
-    if (db) {
-      // Строим SQL-запрос с условиями фильтрации
-      let query = 'SELECT * FROM heroes WHERE 1=1';
-      const queryParams = [];
-      
-      if (search) {
-        query += ' AND (name LIKE ? OR description LIKE ?)';
-        queryParams.push(`%${search}%`, `%${search}%`);
-      }
-      
-      if (region) {
-        query += ' AND region = ?';
-        queryParams.push(region);
-      }
-      
-      if (rank) {
-        query += ' AND rank = ?';
-        queryParams.push(rank);
-      }
-      
-      query += ' LIMIT ?';
-      queryParams.push(limit);
-      
-      // Выполняем запрос к БД
-      const result = await db.query(query, queryParams);
-      heroes = result.rows;
-      
-      // Получаем награды для каждого героя из связанной таблицы
-      const heroIds = heroes.map(hero => hero.id);
-      if (heroIds.length > 0) {
-        const awardsQuery = `
-          SELECT hero_id, award_name 
-          FROM hero_awards 
-          WHERE hero_id IN (${heroIds.map(() => '?').join(',')})
-        `;
-        
-        const awardsResult = await db.query(awardsQuery, heroIds);
-        
-        // Добавляем награды к героям
-        heroes = heroes.map(hero => ({
-          ...hero,
-          awards: awardsResult.rows
-            .filter((award: {hero_id: string, award_name: string}) => award.hero_id === hero.id)
-            .map((award: {hero_id: string, award_name: string}) => award.award_name)
-        }));
-      }
-    } else {
-      // Если БД не доступна, используем моковые данные
-      heroes = mockHeroes.filter(hero => {
-        const matchesSearch = !search || 
-          hero.name.toLowerCase().includes(search.toLowerCase()) || 
-          hero.description.toLowerCase().includes(search.toLowerCase());
-          
-        const matchesRegion = !region || hero.region === region;
-        
-        const matchesRank = !rank || hero.rank === rank;
-        
-        return matchesSearch && matchesRegion && matchesRank;
-      }).slice(0, limit);
+    // Фильтрация по имени или описанию
+    if (search) {
+      const searchLower = search.toLowerCase();
+      heroes = heroes.filter(hero => 
+        hero.name.toLowerCase().includes(searchLower) || 
+        hero.description.toLowerCase().includes(searchLower)
+      );
     }
+    
+    // Фильтрация по региону
+    if (region) {
+      heroes = heroes.filter(hero => hero.region === region);
+    }
+    
+    // Фильтрация по званию
+    if (rank) {
+      heroes = heroes.filter(hero => hero.rank === rank);
+    }
+    
+    // Фильтрация по наградам
+    if (award) {
+      const awardLower = award.toLowerCase();
+      heroes = heroes.filter(hero => 
+        hero.awards.some(a => a.toLowerCase().includes(awardLower))
+      );
+    }
+    
+    // Фильтрация по годам
+    if (yearFrom) {
+      heroes = heroes.filter(hero => {
+        const birthYear = parseInt(hero.years.split('-')[0]);
+        return birthYear >= parseInt(yearFrom);
+      });
+    }
+    
+    if (yearTo) {
+      heroes = heroes.filter(hero => {
+        const birthYear = parseInt(hero.years.split('-')[0]);
+        return birthYear <= parseInt(yearTo);
+      });
+    }
+    
+    // Ограничение количества
+    heroes = heroes.slice(0, limit);
 
+    // Добавляем задержку для имитации сетевого запроса
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     return NextResponse.json(heroes);
   } catch (error) {
     console.error('Ошибка при получении списка героев:', error);
@@ -118,6 +131,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * GET /api/heroes/[id]
+ * Возвращает информацию о герое по ID
+ */
 export async function POST(request: NextRequest) {
   try {
     const heroData = await request.json();
@@ -130,66 +147,23 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    let newHero;
+    // Создаем нового героя (демо-режим)
+    const newHero: Hero = {
+      id: (mockHeroes.length + 1).toString(),
+      name: heroData.name,
+      rank: heroData.rank || '',
+      region: heroData.region || '',
+      description: heroData.description || '',
+      years: heroData.years || '',
+      photo: heroData.photo || '/images/heroes/placeholder.jpg',
+      awards: Array.isArray(heroData.awards) ? heroData.awards : []
+    };
     
-    // Если у нас есть доступ к базе данных
-    if (db) {
-      // Создаем запись в таблице heroes
-      const insertResult = await db.query(
-        `INSERT INTO heroes (name, rank, region, description, years, photo) 
-         VALUES (?, ?, ?, ?, ?, ?) 
-         RETURNING *`,
-        [
-          heroData.name,
-          heroData.rank || '',
-          heroData.region || '',
-          heroData.description || '',
-          heroData.years || '',
-          heroData.photo || '/images/heroes/placeholder.jpg'
-        ]
-      );
-      
-      const hero = insertResult.rows[0];
-      
-      // Если есть награды, добавляем их в таблицу hero_awards
-      if (heroData.awards && Array.isArray(heroData.awards) && heroData.awards.length > 0) {
-        const awardsValues = heroData.awards.map(award => [hero.id, award]);
-        
-        await db.query(
-          `INSERT INTO hero_awards (hero_id, award_name) 
-           VALUES ${awardsValues.map(() => '(?, ?)').join(', ')}`,
-          awardsValues.flat()
-        );
-        
-        // Получаем добавленные награды
-        const awardsResult = await db.query(
-          'SELECT award_name FROM hero_awards WHERE hero_id = ?',
-          [hero.id]
-        );
-        
-        // Добавляем список наград к объекту героя
-        hero.awards = awardsResult.rows.map(row => row.award_name);
-      } else {
-        hero.awards = [];
-      }
-      
-      newHero = hero;
-    } else {
-      // Если БД не доступна, создаем новый объект с моковым ID
-      newHero = {
-        id: (mockHeroes.length + 1).toString(),
-        name: heroData.name,
-        rank: heroData.rank || '',
-        region: heroData.region || '',
-        description: heroData.description || '',
-        years: heroData.years || '',
-        photo: heroData.photo || '/images/heroes/placeholder.jpg',
-        awards: Array.isArray(heroData.awards) ? heroData.awards : []
-      };
-      
-      // Добавляем в моковый массив
-      mockHeroes.push(newHero);
-    }
+    // Добавляем в моковый массив
+    mockHeroes.push(newHero);
+    
+    // Добавляем задержку для имитации сетевого запроса
+    await new Promise(resolve => setTimeout(resolve, 800));
     
     return NextResponse.json(newHero);
   } catch (error) {
