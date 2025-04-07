@@ -4,7 +4,7 @@ import HistoryGallery from '@/components/history/HistoryGallery';
 import HistoryArticles from '@/components/history/HistoryArticles';
 export const metadata = {
   title: 'История ВОВ - Великая Отечественная Война',
-  description: 'Важные события и даты Великой Отечественной Войны. Фотографии и тематические статьи по истории защиты Отечества',
+  description: 'Важные события и даты Великой Отечественной Войны. Фотографии и тематические статьи по истории защиты Отечества.',
 };
 export default function HistoryPage() {
   return (
