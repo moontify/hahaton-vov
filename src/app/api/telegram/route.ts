@@ -2,11 +2,60 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { heroes, schools } from '@/lib/db/schema';
 import { eq, like } from 'drizzle-orm';
+import { sql } from 'drizzle-orm/sql';
 
 /**
  * API для отправки сообщений в Telegram
  * Используется для отправки уведомлений администраторам о новых героях и школах
  */
+
+// Типы для кэша
+type CacheItem<T> = {
+  data: T | null;
+  timestamp: number;
+  ttl: number;
+};
+
+type CacheStore = {
+  heroes: CacheItem<any>;
+  schools: CacheItem<any>;
+  getOrFetch<T>(key: 'heroes' | 'schools', fetchFn: () => Promise<T>): Promise<T>;
+  invalidate(key: 'heroes' | 'schools'): void;
+};
+
+// Добавляем простой кэш для часто используемых данных
+const cache: CacheStore = {
+  heroes: {
+    data: null,
+    timestamp: 0,
+    ttl: 60000 // 60 секунд
+  },
+  schools: {
+    data: null,
+    timestamp: 0,
+    ttl: 60000
+  },
+  // Получает данные из кэша или с помощью функции
+  getOrFetch<T>(key: 'heroes' | 'schools', fetchFn: () => Promise<T>): Promise<T> {
+    const now = Date.now();
+    const cacheItem = this[key];
+    
+    if (cacheItem.data && now - cacheItem.timestamp < cacheItem.ttl) {
+      return Promise.resolve(cacheItem.data as T);
+    }
+    
+    return fetchFn().then(data => {
+      cacheItem.data = data;
+      cacheItem.timestamp = now;
+      return data;
+    });
+  },
+  // Сбросить кэш
+  invalidate(key: 'heroes' | 'schools'): void {
+    this[key].data = null;
+    this[key].timestamp = 0;
+  }
+};
 
 // Функция для отправки административного меню в Telegram
 async function sendAdminMenu(chatId: string): Promise<boolean> {
@@ -573,8 +622,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Анализируем данные кнопки
-    // формат: action:id - например, approve_hero:123 или reject_hero:123
+    // Быстро формируем и возвращаем ответ
     const [action, idStr] = callbackData.split(':');
     const id = parseInt(idStr, 10);
 
@@ -585,12 +633,24 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Возвращаем данные для дальнейшей обработки
-    return NextResponse.json({
+    // Возвращаем данные для дальнейшей обработки и запускаем асинхронную обработку
+    const response = NextResponse.json({
       success: true,
       action,
       id
     });
+
+    // Асинхронная обработка после отправки ответа
+    Promise.resolve().then(async () => {
+      try {
+        // Здесь можно выполнить дополнительные действия после отправки ответа клиенту
+        console.log(`Асинхронная обработка webhook: ${action}, id: ${id}`);
+      } catch (error) {
+        console.error('Ошибка в асинхронной обработке webhook:', error);
+      }
+    });
+
+    return response;
   } catch (error) {
     console.error('Ошибка при обработке вебхука:', error);
     return NextResponse.json(
@@ -598,4 +658,94 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// Оптимизированная функция для получения героев с фильтрацией
+async function getFilteredHeroes(filter: string, pageSize: number, offset: number) {
+  // Если есть фильтр, используем оптимизированный SQL-запрос
+  if (filter) {
+    const filterPattern = `%${filter}%`;
+    const result = await db.execute(sql`
+      SELECT id, first_name, last_name, middle_name, school, class,
+             COUNT(*) OVER() as total_count
+      FROM heroes
+      WHERE last_name LIKE ${filterPattern}
+      LIMIT ${pageSize} OFFSET ${offset}
+    `);
+    
+    if (!result.rows || result.rows.length === 0) {
+      return { heroesList: [], totalHeroes: 0 };
+    }
+    
+    // Преобразуем результат в нужный формат
+    const heroesList = result.rows.map(row => ({
+      id: row.id,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      middleName: row.middle_name,
+      school: row.school,
+      class: row.class
+    }));
+    
+    return {
+      heroesList,
+      totalHeroes: Number(result.rows[0].total_count || 0)
+    };
+  }
+  
+  // Для запроса без фильтрации используем кэш
+  return cache.getOrFetch('heroes', async () => {
+    // Получаем всех героев сразу (для маленьких наборов данных это эффективно)
+    const result = await db.execute(sql`SELECT * FROM heroes`);
+    const allHeroes = result.rows || [];
+    
+    // Преобразуем результат в нужный формат
+    const heroesFormatted = allHeroes.map(row => ({
+      id: row.id,
+      firstName: row.first_name, 
+      lastName: row.last_name,
+      middleName: row.middle_name,
+      school: row.school,
+      class: row.class
+    }));
+    
+    return {
+      heroesList: heroesFormatted.slice(offset, offset + pageSize),
+      totalHeroes: heroesFormatted.length
+    };
+  });
+}
+
+// Аналогично для школ
+async function getFilteredSchools(filter: string, pageSize: number, offset: number) {
+  // Если есть фильтр, используем оптимизированный SQL-запрос
+  if (filter) {
+    const filterPattern = `%${filter}%`;
+    const result = await db.execute(sql`
+      SELECT id, name, COUNT(*) OVER() as total_count
+      FROM schools
+      WHERE name LIKE ${filterPattern}
+      LIMIT ${pageSize} OFFSET ${offset}
+    `);
+    
+    if (!result.rows || result.rows.length === 0) {
+      return { schoolsList: [], totalSchools: 0 };
+    }
+    
+    return {
+      schoolsList: result.rows,
+      totalSchools: Number(result.rows[0].total_count || 0)
+    };
+  }
+  
+  // Для запроса без фильтрации используем кэш
+  return cache.getOrFetch('schools', async () => {
+    // Получаем все школы сразу
+    const result = await db.execute(sql`SELECT * FROM schools`);
+    const allSchools = result.rows || [];
+    return {
+      schoolsList: allSchools.slice(offset, offset + pageSize),
+      totalSchools: allSchools.length
+    };
+  });
 } 

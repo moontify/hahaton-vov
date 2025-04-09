@@ -110,6 +110,40 @@ async function sendAdminMenu(chatId: string): Promise<boolean> {
   }
 }
 
+// Добавляем кэш для часто используемых данных
+const cache = {
+  heroes: {
+    data: null,
+    timestamp: 0,
+    // Время жизни кэша - 60 секунд
+    ttl: 60 * 1000
+  },
+  schools: {
+    data: null,
+    timestamp: 0,
+    ttl: 60 * 1000
+  },
+  // Возвращает данные из кэша или выполняет запрос и кэширует результат
+  async getOrFetch<T>(key: 'heroes' | 'schools', fetchFn: () => Promise<T>): Promise<T> {
+    const now = Date.now();
+    const cacheItem = this[key];
+    
+    if (cacheItem.data && now - cacheItem.timestamp < cacheItem.ttl) {
+      return cacheItem.data as T;
+    }
+    
+    const data = await fetchFn();
+    cacheItem.data = data;
+    cacheItem.timestamp = now;
+    return data;
+  },
+  // Сбрасывает кэш
+  invalidate(key: 'heroes' | 'schools') {
+    this[key].data = null;
+    this[key].timestamp = 0;
+  }
+};
+
 /**
  * POST /api/telegram/webhook
  * Обрабатывает вебхуки от Telegram с ответами от модераторов
@@ -118,215 +152,55 @@ export async function POST(request: NextRequest) {
   try {
     // Получаем данные из тела запроса
     const data = await request.json();
-    console.log('Получены данные вебхука:', JSON.stringify(data, null, 2));
     
-    // Быстро отвечаем на callback_query, если он есть
-    if (data.callback_query && data.callback_query.id) {
-      // Запускаем ответ на callback_query без ожидания
-      answerCallbackQuery(data.callback_query.id).catch(error => {
-        console.error('Ошибка при ответе на callback_query:', error);
-      });
-    }
+    // Сразу формируем и возвращаем успешный ответ
+    const response = NextResponse.json({ 
+      success: true, 
+      message: 'Запрос принят на обработку' 
+    });
     
-    // Обработка текстовых сообщений (для редактирования полей)
-    if (data.message && data.message.text && !data.message.text.startsWith('/')) {
-      const chatId = data.message.chat.id.toString();
-      const text = data.message.text;
-      
-      // Здесь нужно проверить, находится ли пользователь в режиме редактирования
-      // В данном примере мы предполагаем, что мы запоминаем состояние, например, в базе данных
-      
-      // Для простоты, мы будем отвечать на все сообщения одинаково
-      await sendTelegramMessage(chatId, `Получено сообщение: "${text}"\n\nВ данный момент редактирование полей через текстовые сообщения не реализовано полностью. Пожалуйста, используйте меню.`);
-      
-      // Отправляем административное меню
-      await sendAdminMenu(chatId);
-      
-      return NextResponse.json({
-        success: true,
-        message: 'Ответ на текстовое сообщение отправлен'
-      });
-    }
-    
-    // Обработка команды /start
-    if (data.message && data.message.text === '/start') {
-      const chatId = data.message.chat.id.toString();
-      
-      // Отправляем административное меню
-      await sendAdminMenu(chatId);
-      
-      return NextResponse.json({
-        success: true,
-        message: 'Отправлено административное меню'
-      });
-    }
-
-    // Обработка callback_query (нажатия на кнопки)
-    if (data.callback_query) {
-      const callbackData = data.callback_query.data;
-      const chatId = data.callback_query.message.chat.id.toString();
-      
-      // Запускаем асинхронную обработку команды
-      // Используем динамический импорт для запуска обработки в фоне
-      import('node:worker_threads').then(() => {
-        handleCallbackQuery(data, callbackData, chatId).catch(error => {
-          console.error('Ошибка при обработке callback_query:', error);
-        });
-      }).catch(() => {
-        // Если worker_threads не поддерживается, обрабатываем обычным способом
-        handleCallbackQuery(data, callbackData, chatId).catch(error => {
-          console.error('Ошибка при обработке callback_query:', error);
-        });
-      });
-      
-      // Сразу возвращаем успешный ответ
-      return NextResponse.json({ success: true, message: 'Запрос принят на обработку' });
-    }
-    
-    // Проверяем, что пришел правильный формат данных от Telegram
-    if (!data || !data.callback_query || !data.callback_query.data) {
-      return NextResponse.json(
-        { success: false, error: 'Неверный формат данных' },
-        { status: 400 }
-      );
-    }
-
-    // Анализируем данные кнопки
-    // формат: action:id - например, approve_hero:123 или reject_hero:123
-    const callbackData = data.callback_query.data;
-    const [action, idStr] = callbackData.split(':');
-    const id = parseInt(idStr, 10);
-
-    if (isNaN(id)) {
-      return NextResponse.json(
-        { success: false, error: 'Некорректный ID героя' },
-        { status: 400 }
-      );
-    }
-
-    // Получаем героя из таблицы модерации
-    const heroOnModeration = await db.select().from(heroesModeration).where(eq(heroesModeration.id, id)).limit(1);
-    
-    if (heroOnModeration.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Герой не найден в таблице модерации' },
-        { status: 404 }
-      );
-    }
-
-    const hero = heroOnModeration[0];
-    
-    // Формируем имя модератора для отчета
-    let moderatorName = "Администратор";
-    if (data.callback_query.from) {
-      const from = data.callback_query.from;
-      moderatorName = from.first_name || "";
-      if (from.last_name) moderatorName += " " + from.last_name;
-      if (from.username) moderatorName += ` (@${from.username})`;
-    }
-    
-    // Подготовим базовое сообщение с информацией о герое
-    let messageText = `<b>🎖️ Герой на модерации</b>\n\n`;
-    messageText += `<b>ФИО:</b> ${hero.lastName} ${hero.firstName} ${hero.middleName || ''}\n`;
-    messageText += `<b>Школа:</b> ${hero.school}\n`;
-    messageText += `<b>Класс:</b> ${hero.class}\n`;
-    messageText += `<b>Добавил:</b> ${hero.addedBy}\n`;
-    
-    if (hero.birthYear) {
-      messageText += `<b>Год рождения:</b> ${hero.birthYear}\n`;
-    }
-    
-    if (hero.deathYear) {
-      messageText += `<b>Год смерти:</b> ${hero.deathYear}\n`;
-    }
-    
-    if (hero.awards) {
-      messageText += `<b>Награды:</b> ${hero.awards}\n`;
-    }
-    
-    if (hero.isNewSchool) {
-      messageText += `\n<b>⚠️ Внимание!</b> Новая школа: <b>${hero.school}</b>\n`;
-    }
-    
-    // Обрабатываем действие
-    if (action === 'approve_hero') {
-      // Одобряем героя - переносим его в основную таблицу
-      await db.insert(heroes).values({
-        lastName: hero.lastName,
-        firstName: hero.firstName,
-        middleName: hero.middleName,
-        birthYear: hero.birthYear,
-        deathYear: hero.deathYear,
-        awards: hero.awards,
-        school: hero.school,
-        class: hero.class,
-        addedBy: hero.addedBy
-      });
-      
-      // Если это новая школа, добавляем ее в таблицу школ
-      if (hero.isNewSchool) {
-        try {
-          await db.insert(schools).values({
-            name: hero.school
-          }).onConflictDoNothing();
-        } catch (error) {
-          console.error('Ошибка при добавлении школы:', error);
+    // Запускаем обработку в фоновом режиме
+    Promise.resolve().then(async () => {
+      try {
+        // Быстро отвечаем на callback_query, если он есть
+        if (data.callback_query && data.callback_query.id) {
+          answerCallbackQuery(data.callback_query.id).catch(error => {
+            console.error('Ошибка при ответе на callback_query:', error);
+          });
         }
+        
+        // Обработка текстовых сообщений
+        if (data.message && data.message.text && !data.message.text.startsWith('/')) {
+          const chatId = data.message.chat.id.toString();
+          const text = data.message.text;
+          
+          await sendTelegramMessage(chatId, `Получено сообщение: "${text}"\n\nВ данный момент редактирование полей через текстовые сообщения не реализовано полностью. Пожалуйста, используйте меню.`);
+          await sendAdminMenu(chatId);
+          return;
+        }
+        
+        // Обработка команды /start
+        if (data.message && data.message.text === '/start') {
+          const chatId = data.message.chat.id.toString();
+          await sendAdminMenu(chatId);
+          return;
+        }
+        
+        // Обработка callback_query (нажатия на кнопки)
+        if (data.callback_query) {
+          const callbackData = data.callback_query.data;
+          const chatId = data.callback_query.message.chat.id.toString();
+          
+          await handleCallbackQuery(data, callbackData, chatId);
+        }
+      } catch (error) {
+        console.error('Ошибка при асинхронной обработке вебхука:', error);
       }
-      
-      // Обновляем статус героя на модерации
-      await db.update(heroesModeration)
-        .set({ status: 'approved' })
-        .where(eq(heroesModeration.id, id));
-      
-      // Обновляем сообщение в Telegram
-      const approvalText = messageText + `\n\n✅ <b>ОДОБРЕНО</b> (${moderatorName})\n\nГерой успешно добавлен в общий список`;
-      if (hero.telegramMessageId) {
-        await editTelegramMessage(hero.telegramMessageId, approvalText);
-      }
-      
-      // Отвечаем на callback_query, чтобы убрать индикатор загрузки с кнопки
-      await answerCallbackQuery(data.callback_query.id, "Герой успешно одобрен!");
-      
-      // Отправляем ответ
-      return NextResponse.json({
-        success: true,
-        message: 'Герой успешно одобрен и добавлен',
-        action,
-        heroId: id
-      });
-    } 
-    else if (action === 'reject_hero') {
-      // Отклоняем героя - просто меняем его статус
-      await db.update(heroesModeration)
-        .set({ status: 'rejected' })
-        .where(eq(heroesModeration.id, id));
-      
-      // Обновляем сообщение в Telegram
-      const rejectionText = messageText + `\n\n❌ <b>ОТКЛОНЕНО</b> (${moderatorName})\n\nГерой не будет добавлен в общий список`;
-      if (hero.telegramMessageId) {
-        await editTelegramMessage(hero.telegramMessageId, rejectionText);
-      }
-      
-      // Отвечаем на callback_query, чтобы убрать индикатор загрузки с кнопки
-      await answerCallbackQuery(data.callback_query.id, "Герой отклонен!");
-      
-      // Отправляем ответ
-      return NextResponse.json({
-        success: true,
-        message: 'Герой отклонен',
-        action,
-        heroId: id
-      });
-    } 
-    else {
-      return NextResponse.json(
-        { success: false, error: 'Неизвестное действие' },
-        { status: 400 }
-      );
-    }
+    });
+    
+    return response;
   } catch (error) {
-    console.error('Ошибка при обработке вебхука Telegram:', error);
+    console.error('Ошибка при обработке запроса:', error);
     return NextResponse.json(
       { success: false, error: 'Внутренняя ошибка сервера' },
       { status: 500 }
@@ -555,7 +429,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Импортируем функции для отправки списков
+// Оптимизация функции sendHeroesList
 async function sendHeroesList(chatId: string, page: number = 1, filter: string = ''): Promise<boolean> {
   try {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -569,18 +443,51 @@ async function sendHeroesList(chatId: string, page: number = 1, filter: string =
     const pageSize = 5;
     const offset = (page - 1) * pageSize;
     
-    // Получаем героев из базы данных
-    let query = db.select().from(heroes);
+    // Создаем функцию для выборки данных
+    const fetchHeroes = async () => {
+      // Если есть фильтр, не используем кэш
+      if (filter) {
+        // Оптимизированный запрос с фильтрацией - объединяем запросы count и select
+        const query = db
+          .select({
+            id: heroes.id,
+            firstName: heroes.firstName,
+            lastName: heroes.lastName,
+            middleName: heroes.middleName,
+            school: heroes.school,
+            class: heroes.class,
+            totalCount: db.sql<number>`count(*) over()`
+          })
+          .from(heroes)
+          .where(like(heroes.lastName, `%${filter}%`))
+          .limit(pageSize)
+          .offset(offset);
+        
+        const results = await query;
+        
+        if (results.length === 0) {
+          return { heroesList: [], totalHeroes: 0 };
+        }
+        
+        return {
+          heroesList: results,
+          totalHeroes: results[0].totalCount
+        };
+      }
+      
+      // Если нет фильтра, используем кэш или делаем запрос
+      return cache.getOrFetch('heroes', async () => {
+        // Получаем всех героев сразу и храним в кэше
+        const allHeroes = await db.select().from(heroes);
+        return {
+          heroesList: allHeroes.slice(offset, offset + pageSize),
+          totalHeroes: allHeroes.length
+        };
+      });
+    };
     
-    // Если указан фильтр, добавляем его
-    if (filter) {
-      query = query.where(
-        like(heroes.lastName, `%${filter}%`)
-      );
-    }
-    
-    // Получаем героев с пагинацией
-    const heroesList = await query.limit(pageSize).offset(offset);
+    // Получаем данные из кэша или базы
+    const { heroesList, totalHeroes } = await fetchHeroes();
     
     // Получаем общее количество героев (для пагинации)
     let countQuery = db.select({ count: heroes.id }).from(heroes);
@@ -590,7 +497,6 @@ async function sendHeroesList(chatId: string, page: number = 1, filter: string =
       );
     }
     const countResult = await countQuery;
-    const totalHeroes = countResult[0]?.count || 0;
     const totalPages = Math.ceil(totalHeroes / pageSize);
     
     // Если нет героев
@@ -710,6 +616,7 @@ async function sendHeroesList(chatId: string, page: number = 1, filter: string =
   }
 }
 
+// Аналогично оптимизируем функцию sendSchoolsList
 async function sendSchoolsList(chatId: string, page: number = 1, filter: string = ''): Promise<boolean> {
   try {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -723,18 +630,47 @@ async function sendSchoolsList(chatId: string, page: number = 1, filter: string 
     const pageSize = 8;
     const offset = (page - 1) * pageSize;
     
-    // Получаем школы из базы данных
-    let query = db.select().from(schools);
+    // Создаем функцию для выборки данных
+    const fetchSchools = async () => {
+      // Если есть фильтр, не используем кэш
+      if (filter) {
+        // Оптимизированный запрос с фильтрацией - объединяем запросы count и select
+        const query = db
+          .select({
+            id: schools.id,
+            name: schools.name,
+            totalCount: db.sql<number>`count(*) over()`
+          })
+          .from(schools)
+          .where(like(schools.name, `%${filter}%`))
+          .limit(pageSize)
+          .offset(offset);
+        
+        const results = await query;
+        
+        if (results.length === 0) {
+          return { schoolsList: [], totalSchools: 0 };
+        }
+        
+        return {
+          schoolsList: results,
+          totalSchools: results[0].totalCount
+        };
+      }
+      
+      // Если нет фильтра, используем кэш или делаем запрос
+      return cache.getOrFetch('schools', async () => {
+        // Получаем все школы сразу и храним в кэше
+        const allSchools = await db.select().from(schools);
+        return {
+          schoolsList: allSchools.slice(offset, offset + pageSize),
+          totalSchools: allSchools.length
+        };
+      });
+    };
     
-    // Если указан фильтр, добавляем его
-    if (filter) {
-      query = query.where(
-        like(schools.name, `%${filter}%`)
-      );
-    }
-    
-    // Получаем школы с пагинацией
-    const schoolsList = await query.limit(pageSize).offset(offset);
+    // Получаем данные из кэша или базы
+    const { schoolsList, totalSchools } = await fetchSchools();
     
     // Получаем общее количество школ (для пагинации)
     let countQuery = db.select({ count: schools.id }).from(schools);
@@ -744,7 +680,6 @@ async function sendSchoolsList(chatId: string, page: number = 1, filter: string 
       );
     }
     const countResult = await countQuery;
-    const totalSchools = countResult[0]?.count || 0;
     const totalPages = Math.ceil(totalSchools / pageSize);
     
     // Если нет школ
@@ -966,6 +901,9 @@ async function handleCallbackQuery(data: any, callbackData: string, chatId: stri
         
         // Удаляем героя из базы данных
         await db.delete(heroes).where(eq(heroes.id, heroId));
+        
+        // Сбрасываем кэш героев
+        cache.invalidate('heroes');
         
         // Формируем имя модератора для отчета
         let moderatorName = "Администратор";
