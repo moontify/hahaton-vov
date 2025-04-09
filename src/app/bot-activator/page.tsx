@@ -8,6 +8,7 @@ export default function BotActivator() {
   const [counter, setCounter] = useState(0);
   const [isAuth, setIsAuth] = useState(false);
   const [password, setPassword] = useState('');
+  const [pingInterval, setPingInterval] = useState(10); // интервал в секундах, по умолчанию 10
   const correctPassword = 'adminbot123'; // В реальном проекте используйте защищенный механизм
 
   // Функция для пинга webhook
@@ -43,14 +44,14 @@ export default function BotActivator() {
     // Первоначальный пинг
     pingWebhook();
     
-    // Настройка интервала пинга (каждые 15 секунд)
+    // Настройка интервала пинга
     const interval = setInterval(() => {
       pingWebhook();
-    }, 15 * 1000);
+    }, pingInterval * 1000);
     
     // Очистка интервала при размонтировании компонента
     return () => clearInterval(interval);
-  }, [isAuth]);
+  }, [isAuth, pingInterval]);
 
   // Обработчик входа
   const handleLogin = () => {
@@ -59,6 +60,11 @@ export default function BotActivator() {
     } else {
       alert('Неверный пароль!');
     }
+  };
+
+  // Обработчик изменения интервала
+  const handleIntervalChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setPingInterval(Number(e.target.value));
   };
 
   // Отображение информации о статусе
@@ -113,28 +119,67 @@ export default function BotActivator() {
             <span className="text-gray-700">{lastPing}</span>
           </div>
           
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <span className="font-semibold">Количество пингов:</span>
             <span className="px-2 py-1 text-white bg-blue-500 rounded">{counter}</span>
           </div>
+          
+          <div className="flex items-center justify-between">
+            <span className="font-semibold">Интервал пинга:</span>
+            <select 
+              value={pingInterval} 
+              onChange={handleIntervalChange}
+              className="px-2 py-1 border rounded"
+            >
+              <option value="5">5 секунд</option>
+              <option value="10">10 секунд</option>
+              <option value="15">15 секунд</option>
+              <option value="30">30 секунд</option>
+              <option value="60">1 минута</option>
+            </select>
+          </div>
+        </div>
+        
+        <div className="p-4 mb-4 text-sm bg-yellow-50 border border-yellow-200 rounded-md">
+          <p className="font-semibold text-yellow-800 mb-1">⚠️ Важная информация</p>
+          <p className="text-yellow-700">
+            На бесплатном тарифе Vercel, cron-задания могут запускаться только один раз в день.
+            <strong> Поэтому, пока эта страница открыта в браузере, бот будет отвечать мгновенно.</strong>
+          </p>
         </div>
         
         <p className="mb-4 text-sm text-gray-600">
           Эта страница поддерживает вашего Telegram бота в активном состоянии.
-          Просто оставьте её открытой в браузере, и бот будет отвечать мгновенно.
+          Просто оставьте её открытой в любом браузере, и бот будет отвечать мгновенно.
         </p>
         
-        <p className="text-sm text-gray-600">
-          Как это работает: каждые 15 секунд отправляется запрос к API, что не даёт
+        <p className="text-sm text-gray-600 mb-4">
+          Как это работает: регулярные запросы к API не дают
           Vercel serverless функции "заснуть". Таким образом, бот всегда остаётся активным.
         </p>
         
-        <div className="mt-6">
+        <p className="text-sm text-gray-600 mb-4">
+          <strong>Совет:</strong> Для мобильных устройств добавьте эту страницу на главный экран,
+          чтобы она работала в режиме приложения и не закрывалась при блокировке экрана.
+        </p>
+        
+        <div className="mt-6 grid grid-cols-1 gap-3">
           <button
             onClick={() => pingWebhook()}
             className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             Пинг сейчас
+          </button>
+          
+          <button
+            onClick={() => {
+              if (window.confirm('Вы хотите добавить эту страницу на главный экран?')) {
+                alert('На iOS: нажмите кнопку "Поделиться" и выберите "На экран «Домой»"\nНа Android: меню браузера → "Установить приложение"');
+              }
+            }}
+            className="w-full px-4 py-2 font-medium text-blue-700 bg-blue-100 border border-blue-300 rounded-md hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            Как добавить на главный экран
           </button>
         </div>
       </div>
