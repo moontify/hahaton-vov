@@ -6,19 +6,5 @@
   "outputDirectory": ".next",
   "env": {
     "NODE_ENV": "production"
-  },
-  "functions": {
-    "api/telegram/webhook/route.ts": {
-      "maxDuration": 10
-    },
-    "api/telegram/route.ts": {
-      "maxDuration": 10
-    }
-  },
-  "crons": [
-    {
-      "path": "/api/telegram/ping",
-      "schedule": "*/5 * * * *"
-    }
-  ]
+  }
 } 
