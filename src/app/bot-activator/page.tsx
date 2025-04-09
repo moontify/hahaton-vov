@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -8,8 +9,8 @@ export default function BotActivator() {
   const [counter, setCounter] = useState(0);
   const [isAuth, setIsAuth] = useState(false);
   const [password, setPassword] = useState('');
-  const [pingInterval, setPingInterval] = useState(10); // интервал в секундах, по умолчанию 10
-  const correctPassword = 'adminbot123'; // В реальном проекте используйте защищенный механизм
+  const [pingInterval, setPingInterval] = useState(10);
+  const correctPassword = 'adminbot123';
 
   // Функция для пинга webhook
   async function pingWebhook() {
@@ -174,7 +175,7 @@ export default function BotActivator() {
           <button
             onClick={() => {
               if (window.confirm('Вы хотите добавить эту страницу на главный экран?')) {
-                alert('На iOS: нажмите кнопку "Поделиться" и выберите "На экран «Домой»"\nНа Android: меню браузера → "Установить приложение"');
+                alert('На iOS: нажмите кнопку \'Поделиться\' и выберите \'На экран «Домой»\'\nНа Android: меню браузера → \'Установить приложение\'');
               }
             }}
             className="w-full px-4 py-2 font-medium text-blue-700 bg-blue-100 border border-blue-300 rounded-md hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
