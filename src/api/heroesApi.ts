@@ -1,5 +1,9 @@
 import { Hero, HeroFilter } from '@/types';
 
+// Кэш для хранения результатов запросов
+const requestCache = new Map();
+const CACHE_TIMEOUT = 5 * 60 * 1000; // 5 минут
+
 // Массив героев по умолчанию для демонстрации
 const defaultHeroes: Hero[] = [
   {
@@ -54,106 +58,142 @@ const defaultHeroes: Hero[] = [
   }
 ];
 
-// Функция для инициализации героев в localStorage
-const initHeroes = (): Hero[] => {
-  if (typeof window === 'undefined') return defaultHeroes;
+// Функция для получения данных с кэшированием
+async function fetchWithCache<T>(key: string, fetchFn: () => Promise<T>): Promise<T> {
+  const now = Date.now();
+  const cachedData = requestCache.get(key);
+  
+  // Если в кэше есть данные и они не устарели, возвращаем их
+  if (cachedData && now - cachedData.timestamp < CACHE_TIMEOUT) {
+    return cachedData.data;
+  }
   
   try {
-    const storedHeroes = localStorage.getItem('heroes');
-    if (!storedHeroes) {
-      localStorage.setItem('heroes', JSON.stringify(defaultHeroes));
-      return defaultHeroes;
-    }
+    // Получаем свежие данные
+    const data = await fetchFn();
     
-    return JSON.parse(storedHeroes);
+    // Сохраняем в кэш с текущей временной меткой
+    requestCache.set(key, { 
+      data, 
+      timestamp: now 
+    });
+    
+    return data;
   } catch (error) {
-    console.error('Ошибка при инициализации героев:', error);
+    // Если есть устаревшие данные, лучше вернуть их, чем ничего
+    if (cachedData) {
+      console.warn(`Ошибка получения свежих данных, используем кэш для "${key}"`);
+      return cachedData.data;
+    }
+    throw error;
+  }
+}
+
+// Инициализация хранилища героев (в локальном хранилище или воссоздание из defaultHeroes)
+function initHeroes(): Hero[] {
+  try {
+    if (typeof window !== 'undefined') {
+      const storedHeroes = localStorage.getItem('heroes');
+      if (storedHeroes) {
+        return JSON.parse(storedHeroes);
+      }
+      // Если в localStorage ничего нет, сохраняем туда defaultHeroes
+      localStorage.setItem('heroes', JSON.stringify(defaultHeroes));
+    }
+    return defaultHeroes;
+  } catch (error) {
+    console.error('Ошибка при инициализации хранилища героев:', error);
     return defaultHeroes;
   }
-};
+}
 
-// Функция для сохранения героев в localStorage
-const saveHeroes = (heroes: Hero[]): void => {
-  if (typeof window === 'undefined') return;
-  
+// Сохранение списка героев
+function saveHeroes(heroes: Hero[]): void {
   try {
-    localStorage.setItem('heroes', JSON.stringify(heroes));
-    console.log('Герои сохранены в localStorage', heroes.length);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('heroes', JSON.stringify(heroes));
+    }
   } catch (error) {
     console.error('Ошибка при сохранении героев:', error);
   }
-};
-
-// Функция фильтрации героев
-const filterHeroes = (heroes: Hero[], filters: HeroFilter): Hero[] => {
-  return heroes.filter(hero => {
-    // Поиск по имени или описанию
-    const matchesSearch = !filters.searchQuery || 
-      hero.name.toLowerCase().includes(filters.searchQuery.toLowerCase()) || 
-      hero.description.toLowerCase().includes(filters.searchQuery.toLowerCase());
-    
-    // Фильтрация по региону
-    const matchesRegion = !filters.region || hero.region === filters.region;
-    
-    // Фильтрация по званию
-    const matchesRank = !filters.rank || hero.rank === filters.rank;
-    
-    // Фильтрация по наградам
-    const matchesAward = !filters.award || 
-      hero.awards.some(award => award.toLowerCase().includes(filters.award.toLowerCase()));
-    
-    // Фильтрация по годам рождения
-    const birthYear = hero.years.split('-')[0];
-    const matchesYearFrom = !filters.yearFrom || parseInt(birthYear) >= parseInt(filters.yearFrom);
-    const matchesYearTo = !filters.yearTo || parseInt(birthYear) <= parseInt(filters.yearTo);
-    
-    return matchesSearch && matchesRegion && matchesRank && matchesAward && matchesYearFrom && matchesYearTo;
-  });
-};
+}
 
 /**
- * Получение списка героев с фильтрацией
+ * Получение всех героев с учетом фильтров
  */
 export async function getHeroes(filters?: HeroFilter): Promise<Hero[]> {
-  // Имитация задержки сети
-  await new Promise(resolve => setTimeout(resolve, 500));
+  // Генерируем ключ кэша на основе фильтров
+  const cacheKey = `heroes:${JSON.stringify(filters || {})}`;
   
-  try {
-    const heroes = initHeroes();
+  return fetchWithCache(cacheKey, async () => {
+    // Имитация задержки сети
+    await new Promise(resolve => setTimeout(resolve, 300)); // Уменьшена задержка с 800 до 300 мс
     
-    if (!filters) return heroes;
-    
-    return filterHeroes(heroes, filters);
-  } catch (error) {
-    console.error('Ошибка при получении героев:', error);
-    return [];
-  }
+    try {
+      // Получаем начальные данные
+      const heroes = initHeroes();
+      
+      // Если фильтров нет, возвращаем всех героев
+      if (!filters) {
+        return heroes;
+      }
+      
+      // Применяем фильтры
+      return heroes.filter(hero => {
+        let matches = true;
+        
+        // Фильтр по имени
+        if (filters.searchQuery) {
+          matches = matches && hero.name.toLowerCase().includes(filters.searchQuery.toLowerCase());
+        }
+        
+        // Фильтр по региону
+        if (filters.region) {
+          matches = matches && hero.region === filters.region;
+        }
+        
+        // Фильтр по званию
+        if (filters.rank) {
+          matches = matches && hero.rank === filters.rank;
+        }
+        
+        // Дополнительно можно фильтровать по годам, наградам и т.д.
+        
+        return matches;
+      });
+    } catch (error) {
+      console.error('Ошибка при получении списка героев:', error);
+      return [];
+    }
+  });
 }
 
 /**
- * Получение героя по ID
+ * Получение одного героя по ID
  */
 export async function getHeroById(id: string): Promise<Hero | null> {
-  // Имитация задержки сети
-  await new Promise(resolve => setTimeout(resolve, 300));
+  const cacheKey = `hero:${id}`;
   
-  try {
-    const heroes = initHeroes();
-    const hero = heroes.find(h => h.id === id);
+  return fetchWithCache(cacheKey, async () => {
+    // Имитация задержки сети
+    await new Promise(resolve => setTimeout(resolve, 200)); // Уменьшена задержка для единичного запроса
     
-    return hero || null;
-  } catch (error) {
-    console.error(`Ошибка при получении героя с ID ${id}:`, error);
-    return null;
-  }
+    try {
+      const heroes = initHeroes();
+      return heroes.find(hero => hero.id === id) || null;
+    } catch (error) {
+      console.error(`Ошибка при получении героя с ID ${id}:`, error);
+      return null;
+    }
+  });
 }
 
 /**
- * Добавление нового героя
+ * Добавление нового героя с оптимизацией
  */
 export async function addHero(heroData: Partial<Hero>): Promise<Hero> {
-  // Имитация задержки сети
-  await new Promise(resolve => setTimeout(resolve, 800));
+  // Имитация задержки сети, но меньше чем раньше
+  await new Promise(resolve => setTimeout(resolve, 400));
   
   try {
     const heroes = initHeroes();
@@ -162,7 +202,7 @@ export async function addHero(heroData: Partial<Hero>): Promise<Hero> {
     const maxId = heroes.length > 0 ? Math.max(...heroes.map(h => parseInt(h.id))) : 0;
     const newId = (maxId + 1).toString();
     
-    // Создание нового героя
+    // Создание нового героя с оптимизацией данных
     const newHero: Hero = {
       id: newId,
       name: heroData.name || 'Неизвестный герой',
@@ -180,6 +220,9 @@ export async function addHero(heroData: Partial<Hero>): Promise<Hero> {
     // Сохранение обновленного списка
     saveHeroes(updatedHeroes);
     
+    // Обновляем кэш, чтобы следующие запросы получали актуальные данные
+    requestCache.delete('heroes:{}');
+    
     console.log('Добавлен новый герой:', newHero);
     
     return newHero;
@@ -190,56 +233,104 @@ export async function addHero(heroData: Partial<Hero>): Promise<Hero> {
 }
 
 /**
- * Обновление данных о герое
+ * Поиск героев по тексту
  */
-export async function updateHero(id: string, heroData: Partial<Hero>): Promise<Hero> {
-  // Имитация задержки сети
-  await new Promise(resolve => setTimeout(resolve, 600));
+export async function searchHeroes(query: string): Promise<Hero[]> {
+  if (!query) return [];
   
-  try {
-    const heroes = initHeroes();
-    const index = heroes.findIndex(h => h.id === id);
+  const cacheKey = `search:${query}`;
+  
+  return fetchWithCache(cacheKey, async () => {
+    // Имитация задержки сети
+    await new Promise(resolve => setTimeout(resolve, 300));
     
-    if (index === -1) {
-      throw new Error('Герой не найден');
+    try {
+      const heroes = initHeroes();
+      const searchTerms = query.toLowerCase().split(' ').filter(term => term.length > 0);
+      
+      if (searchTerms.length === 0) return [];
+      
+      // Оптимизированный алгоритм поиска
+      return heroes.filter(hero => {
+        const heroText = `${hero.name} ${hero.rank} ${hero.region} ${hero.description}`.toLowerCase();
+        
+        // Проверяем, содержит ли текст героя все поисковые термины
+        return searchTerms.every(term => heroText.includes(term));
+      });
+    } catch (error) {
+      console.error('Ошибка при поиске героев:', error);
+      return [];
     }
-    
-    // Обновление данных героя
-    const updatedHero: Hero = {
-      ...heroes[index],
-      ...heroData,
-      id, // ID не меняется
-    };
-    
-    heroes[index] = updatedHero;
-    
-    // Сохранение обновленного списка
-    saveHeroes(heroes);
-    
-    return updatedHero;
-  } catch (error) {
-    console.error(`Ошибка при обновлении героя с ID ${id}:`, error);
-    throw error;
-  }
+  });
 }
 
 /**
  * Удаление героя
  */
-export async function deleteHero(id: string): Promise<{ success: boolean }> {
-  // Имитация задержки сети
+export async function deleteHero(id: string): Promise<boolean> {
   await new Promise(resolve => setTimeout(resolve, 400));
   
   try {
     const heroes = initHeroes();
-    const filteredHeroes = heroes.filter(h => h.id !== id);
+    const updatedHeroes = heroes.filter(hero => hero.id !== id);
     
-    // Сохранение обновленного списка
-    saveHeroes(filteredHeroes);
+    // Если количество не изменилось, значит героя не нашли
+    if (heroes.length === updatedHeroes.length) {
+      return false;
+    }
     
-    return { success: true };
+    saveHeroes(updatedHeroes);
+    
+    // Очищаем все связанные кэши
+    for (const key of Array.from(requestCache.keys())) {
+      if (key.startsWith('heroes:') || key === `hero:${id}`) {
+        requestCache.delete(key);
+      }
+    }
+    
+    return true;
   } catch (error) {
     console.error(`Ошибка при удалении героя с ID ${id}:`, error);
-    throw error;
+    return false;
   }
+}
+
+/**
+ * Получение уникальных регионов для фильтрации
+ */
+export async function getUniqueRegions(): Promise<string[]> {
+  const cacheKey = 'regions';
+  
+  return fetchWithCache(cacheKey, async () => {
+    try {
+      const heroes = initHeroes();
+      
+      // Получаем уникальные регионы
+      const regions = [...new Set(heroes.map(hero => hero.region))].filter(Boolean);
+      return regions.sort();
+    } catch (error) {
+      console.error('Ошибка при получении списка регионов:', error);
+      return [];
+    }
+  });
+}
+
+/**
+ * Получение уникальных званий для фильтрации
+ */
+export async function getUniqueRanks(): Promise<string[]> {
+  const cacheKey = 'ranks';
+  
+  return fetchWithCache(cacheKey, async () => {
+    try {
+      const heroes = initHeroes();
+      
+      // Получаем уникальные звания
+      const ranks = [...new Set(heroes.map(hero => hero.rank))].filter(Boolean);
+      return ranks.sort();
+    } catch (error) {
+      console.error('Ошибка при получении списка званий:', error);
+      return [];
+    }
+  });
 } 

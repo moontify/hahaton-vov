@@ -1,5 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Hero } from '@/types';
+import { db } from '@/lib/db';
+import { heroes, heroesModeration } from '@/lib/db/schema';
+import { eq, like, and, or } from 'drizzle-orm';
+import { initDB } from '@/lib/db/init';
+
+// Флаг, указывающий, была ли инициализирована база данных
+let dbInitialized = false;
+
+// Функция для проверки и инициализации базы данных
+async function ensureDbInitialized() {
+  if (!dbInitialized) {
+    try {
+      console.log('Автоматическая инициализация базы данных...');
+      await initDB();
+      dbInitialized = true;
+    } catch (error) {
+      console.error('Ошибка при инициализации базы данных:', error);
+      throw error;
+    }
+  }
+}
 
 // Временные данные для примера
 const mockHeroes: Hero[] = [
@@ -59,81 +80,66 @@ const mockHeroes: Hero[] = [
  * GET /api/heroes
  * Возвращает список героев с фильтрацией
  */
-export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const search = searchParams.get('search') || '';
-  const region = searchParams.get('region') || '';
-  const rank = searchParams.get('rank') || '';
-  const award = searchParams.get('award') || '';
-  const yearFrom = searchParams.get('yearFrom') || '';
-  const yearTo = searchParams.get('yearTo') || '';
-  const limit = parseInt(searchParams.get('limit') || '100');
-
+export async function GET(request: Request) {
   try {
-    // Используем моковые данные с фильтрацией
-    let heroes = [...mockHeroes];
+    // Убедимся, что база данных инициализирована
+    await ensureDbInitialized();
     
-    // Фильтрация по имени или описанию
-    if (search) {
-      const searchLower = search.toLowerCase();
-      heroes = heroes.filter(hero => 
-        hero.name.toLowerCase().includes(searchLower) || 
-        hero.description.toLowerCase().includes(searchLower)
-      );
+    const { searchParams } = new URL(request.url);
+    
+    // Получаем параметры фильтрации
+    const lastName = searchParams.get('lastName');
+    const firstName = searchParams.get('firstName');
+    const middleName = searchParams.get('middleName');
+    const school = searchParams.get('school');
+    const classParam = searchParams.get('class');
+    const award = searchParams.get('award');
+    const birthYear = searchParams.get('birthYear');
+    
+    let filters = [];
+    
+    // Добавляем фильтры, если они указаны
+    if (lastName) {
+      filters.push(like(heroes.lastName, `%${lastName}%`));
     }
     
-    // Фильтрация по региону
-    if (region) {
-      heroes = heroes.filter(hero => hero.region === region);
+    if (firstName) {
+      filters.push(like(heroes.firstName, `%${firstName}%`));
     }
     
-    // Фильтрация по званию
-    if (rank) {
-      heroes = heroes.filter(hero => hero.rank === rank);
+    if (middleName) {
+      filters.push(like(heroes.middleName, `%${middleName}%`));
     }
     
-    // Фильтрация по наградам
+    if (school) {
+      filters.push(like(heroes.school, `%${school}%`));
+    }
+    
+    if (classParam) {
+      filters.push(like(heroes.class, `%${classParam}%`));
+    }
+    
     if (award) {
-      const awardLower = award.toLowerCase();
-      heroes = heroes.filter(hero => 
-        hero.awards.some(a => a.toLowerCase().includes(awardLower))
-      );
+      filters.push(like(heroes.awards, `%${award}%`));
     }
     
-    // Фильтрация по годам
-    if (yearFrom) {
-      heroes = heroes.filter(hero => {
-        try {
-          const birthYear = parseInt(hero.years.split('-')[0]);
-          return birthYear >= parseInt(yearFrom);
-        } catch (e) {
-          return true;
-        }
-      });
+    if (birthYear) {
+      filters.push(eq(heroes.birthYear, parseInt(birthYear)));
     }
     
-    if (yearTo) {
-      heroes = heroes.filter(hero => {
-        try {
-          const birthYear = parseInt(hero.years.split('-')[0]);
-          return birthYear <= parseInt(yearTo);
-        } catch (e) {
-          return true;
-        }
-      });
+    // Выполняем запрос с фильтрами или без них
+    let result;
+    if (filters.length > 0) {
+      result = await db.select().from(heroes).where(and(...filters));
+    } else {
+      result = await db.select().from(heroes);
     }
     
-    // Ограничение количества
-    heroes = heroes.slice(0, limit);
-
-    // Добавляем задержку для имитации сетевого запроса
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    return NextResponse.json(heroes);
+    return NextResponse.json(result);
   } catch (error) {
-    console.error('Ошибка при получении списка героев:', error);
+    console.error('Ошибка при получении героев:', error);
     return NextResponse.json(
-      { error: 'Ошибка при получении списка героев' }, 
+      { error: 'Ошибка при получении героев' },
       { status: 500 }
     );
   }
@@ -141,43 +147,105 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/heroes
- * Добавляет нового героя
+ * Добавляет нового героя на модерацию
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const heroData = await request.json();
+    // Убедимся, что база данных инициализирована
+    await ensureDbInitialized();
+    
+    const body = await request.json();
     
     // Проверяем обязательные поля
-    if (!heroData.name) {
+    if (!body.lastName || !body.firstName || !body.school || !body.class || !body.addedBy) {
       return NextResponse.json(
-        { error: 'Имя героя обязательно' }, 
+        { error: 'Необходимо заполнить обязательные поля' },
         { status: 400 }
       );
     }
     
-    // Создаем нового героя (демо-режим)
-    const newHero: Hero = {
-      id: (mockHeroes.length + 1).toString(),
-      name: heroData.name,
-      rank: heroData.rank || '',
-      region: heroData.region || '',
-      description: heroData.description || '',
-      years: heroData.years || '',
-      photo: heroData.photo || '/images/heroes/placeholder.jpg',
-      awards: Array.isArray(heroData.awards) ? heroData.awards : []
-    };
+    // Добавляем героя в таблицу модерации вместо основной таблицы
+    // Так как теперь герои проходят модерацию перед добавлением в основную таблицу
+    const isNewSchool = !!body.isNewSchool;
     
-    // Добавляем в моковый массив
-    mockHeroes.push(newHero);
+    const result = await db.insert(heroesModeration).values({
+      lastName: body.lastName,
+      firstName: body.firstName,
+      middleName: body.middleName,
+      birthYear: body.birthYear,
+      deathYear: body.deathYear,
+      awards: body.awards,
+      school: body.school,
+      class: body.class,
+      addedBy: body.addedBy,
+      isNewSchool: isNewSchool,
+      status: 'pending'
+    }).returning();
     
-    // Добавляем задержку для имитации сетевого запроса
-    await new Promise(resolve => setTimeout(resolve, 800));
+    const newHero = result[0];
     
-    return NextResponse.json(newHero);
+    // Отправляем уведомление в Telegram, если задан API ключ
+    const apiKey = process.env.API_KEY;
+    if (apiKey) {
+      try {
+        // Формируем сообщение для Telegram
+        let message = `<b>🎖️ Новый герой на модерацию!</b>\n\n`;
+        message += `<b>ФИО:</b> ${body.lastName} ${body.firstName} ${body.middleName || ''}\n`;
+        message += `<b>Школа:</b> ${body.school}\n`;
+        message += `<b>Класс:</b> ${body.class}\n`;
+        message += `<b>Добавил:</b> ${body.addedBy}\n`;
+        
+        if (body.birthYear) {
+          message += `<b>Год рождения:</b> ${body.birthYear}\n`;
+        }
+        
+        if (body.deathYear) {
+          message += `<b>Год смерти:</b> ${body.deathYear}\n`;
+        }
+        
+        if (body.awards) {
+          message += `<b>Награды:</b> ${body.awards}\n`;
+        }
+        
+        // Если это новая школа, добавляем информацию об этом
+        if (isNewSchool) {
+          message += `\n<b>⚠️ Внимание!</b> Добавлена новая школа: <b>${body.school}</b>\n`;
+          message += `Требуется модерация и добавление в общий список школ.`;
+        }
+        
+        // Отправляем запрос к API Telegram с кнопками для модерации
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `http://localhost:3000`;
+        const telegramResponse = await fetch(`${baseUrl}/api/telegram`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey
+          },
+          body: JSON.stringify({ 
+            message, 
+            heroId: newHero.id 
+          }),
+        });
+        
+        const telegramResult = await telegramResponse.json();
+        
+        // Если есть ID сообщения, сохраняем его в записи о герое
+        if (telegramResult.messageId) {
+          await db.update(heroesModeration)
+            .set({ telegramMessageId: telegramResult.messageId })
+            .where(eq(heroesModeration.id, newHero.id));
+        }
+      } catch (telegramError) {
+        // Логируем ошибку, но не прерываем выполнение запроса
+        console.error('Ошибка при отправке уведомления в Telegram:', telegramError);
+      }
+    }
+    
+    return NextResponse.json(result[0]);
   } catch (error) {
     console.error('Ошибка при добавлении героя:', error);
     return NextResponse.json(
-      { error: 'Ошибка при добавлении героя' }, 
+      { error: 'Ошибка при добавлении героя' },
       { status: 500 }
     );
   }

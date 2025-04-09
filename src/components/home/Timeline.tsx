@@ -10,7 +10,7 @@ const timelineEvents = [
     title: 'Начало войны',
     date: '22 июня 1941',
     description: 'Германия без объявления войны напала на СССР. Началась Великая Отечественная война, продлившаяся 1418 дней и ставшая самым кровопролитным конфликтом в истории нашей страны.',
-    image: 'https://media.kpfu.ru/sites/default/files/2024-06/E352FE9C-2BAB-445A-8B5A-313EAE277BDA.jpeg'
+    image: 'https://media.kpfu.ru/sites/default/files/2025-06/E352FE9C-2BAB-445A-8B5A-313EAE277BDA.jpeg'
   },
   {
     id: 2,

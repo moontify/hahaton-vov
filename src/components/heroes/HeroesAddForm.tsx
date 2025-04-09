@@ -1,8 +1,8 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
-import { FaUpload, FaSave, FaUser, FaMedal, FaRegCalendarAlt, FaMapMarkerAlt, FaStar, FaCheck } from 'react-icons/fa';
+import { FaUpload, FaSave, FaUser, FaMedal, FaRegCalendarAlt, FaMapMarkerAlt, FaStar, FaCheck, FaCrop, FaCompress, FaUndo } from 'react-icons/fa';
 import { addHero } from '@/api/heroesApi';
 import { HeroFormData } from '@/types';
 const initialFormData: HeroFormData = {
@@ -24,6 +24,15 @@ export default function HeroesAddForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [cropMode, setCropMode] = useState(false);
+  const [cropStart, setCropStart] = useState<{x: number, y: number} | null>(null);
+  const [cropEnd, setCropEnd] = useState<{x: number, y: number} | null>(null);
+  const [originalPhoto, setOriginalPhoto] = useState<string | null>(null);
+  const [compressionLevel, setCompressionLevel] = useState(0.8); // 0.1-1.0, где 1.0 - без сжатия
+  
+  const photoContainerRef = useRef<HTMLDivElement>(null);
+  
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -37,13 +46,139 @@ export default function HeroesAddForm() {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      
+      // Проверка типа файла
+      if (!file.type.startsWith('image/')) {
+        setPhotoError('Пожалуйста, загрузите файл изображения');
+        return;
+      }
+      
+      // Проверка размера файла (5MB максимум)
+      if (file.size > 5 * 1024 * 1024) {
+        setPhotoError('Размер файла не должен превышать 5MB');
+        return;
+      }
+      
+      setPhotoError(null);
       const reader = new FileReader();
       reader.onload = () => {
-        setPhotoPreview(reader.result as string);
+        const result = reader.result as string;
+        setPhotoPreview(result);
+        setOriginalPhoto(result);
         setFormData((prev) => ({ ...prev, photo: file }));
       };
       reader.readAsDataURL(file);
     }
+  };
+  const handleCropStart = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cropMode || !photoContainerRef.current) return;
+    
+    const container = photoContainerRef.current;
+    const rect = container.getBoundingClientRect();
+    
+    setCropStart({
+      x: (e.clientX - rect.left) / rect.width,
+      y: (e.clientY - rect.top) / rect.height
+    });
+  };
+  const handleCropMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cropMode || !cropStart || !photoContainerRef.current) return;
+    
+    const container = photoContainerRef.current;
+    const rect = container.getBoundingClientRect();
+    
+    setCropEnd({
+      x: Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1),
+      y: Math.min(Math.max((e.clientY - rect.top) / rect.height, 0), 1)
+    });
+  };
+  const handleCropEnd = () => {
+    if (!cropMode || !cropStart || !cropEnd || !photoPreview) return;
+    
+    // Создаем изображение для обработки
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      // Нормализуем координаты обрезки
+      const x1 = Math.min(cropStart.x, cropEnd.x) * img.width;
+      const y1 = Math.min(cropStart.y, cropEnd.y) * img.height;
+      const x2 = Math.max(cropStart.x, cropEnd.x) * img.width;
+      const y2 = Math.max(cropStart.y, cropEnd.y) * img.height;
+      
+      const cropWidth = x2 - x1;
+      const cropHeight = y2 - y1;
+      
+      // Если область обрезки слишком маленькая, отменяем
+      if (cropWidth < 10 || cropHeight < 10) {
+        setCropStart(null);
+        setCropEnd(null);
+        return;
+      }
+      
+      canvas.width = cropWidth;
+      canvas.height = cropHeight;
+      
+      // Рисуем обрезанное изображение
+      ctx.drawImage(img, x1, y1, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+      
+      // Получаем обрезанное изображение
+      const croppedImageURL = canvas.toDataURL('image/jpeg', compressionLevel);
+      setPhotoPreview(croppedImageURL);
+      
+      // Преобразование base64 строки в File объект
+      fetch(croppedImageURL)
+        .then(res => res.blob())
+        .then(blob => {
+          const file = new File([blob], 'cropped-image.jpg', { type: 'image/jpeg' });
+          setFormData(prev => ({ ...prev, photo: file }));
+        });
+      
+      setCropMode(false);
+      setCropStart(null);
+      setCropEnd(null);
+    };
+    img.src = photoPreview;
+  };
+  const resetImage = () => {
+    if (originalPhoto) {
+      setPhotoPreview(originalPhoto);
+      setCropMode(false);
+      setCropStart(null);
+      setCropEnd(null);
+    }
+  };
+  const compressImage = () => {
+    if (!photoPreview) return;
+    
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      // Используем оригинальный размер изображения
+      canvas.width = img.width;
+      canvas.height = img.height;
+      
+      // Рисуем изображение на canvas
+      ctx.drawImage(img, 0, 0, img.width, img.height);
+      
+      // Получаем сжатое изображение (0.7 - это уровень сжатия, можно регулировать)
+      const compressedImageURL = canvas.toDataURL('image/jpeg', compressionLevel);
+      setPhotoPreview(compressedImageURL);
+      
+      // Преобразование base64 строки в File объект
+      fetch(compressedImageURL)
+        .then(res => res.blob())
+        .then(blob => {
+          const file = new File([blob], 'compressed-image.jpg', { type: 'image/jpeg' });
+          setFormData(prev => ({ ...prev, photo: file }));
+        });
+    };
+    img.src = photoPreview;
   };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -411,41 +546,107 @@ export default function HeroesAddForm() {
             >
               <div className="relative mb-4">
                 <label className="block text-gray-300 mb-2 text-sm">Фотография (если есть)</label>
-                <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-600 rounded-lg p-4 cursor-pointer hover:border-primary transition-colors bg-gray-800/50 overflow-hidden">
+                <div className={`border-2 border-dashed rounded-lg overflow-hidden transition-colors bg-gray-800/50 ${cropMode ? 'border-amber-500' : 'border-gray-600 hover:border-primary'}`}>
                   {photoPreview ? (
-                    <div className="relative w-full h-48 mb-2">
-                      <Image 
-                        src={photoPreview}
-                        alt="Предпросмотр" 
-                        fill
-                        className="object-contain"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPhotoPreview(null);
-                          setFormData(prev => ({ ...prev, photo: null }));
-                        }}
-                        className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full hover:bg-red-700"
+                    <div className="flex flex-col">
+                      <div 
+                        ref={photoContainerRef}
+                        className="relative w-full h-64 mb-2 overflow-hidden cursor-crosshair" 
+                        onMouseDown={handleCropStart}
+                        onMouseMove={handleCropMove}
+                        onMouseUp={handleCropEnd}
+                        onMouseLeave={cropStart ? handleCropEnd : undefined}
                       >
-                        ✕
-                      </button>
+                        <Image 
+                          src={photoPreview}
+                          alt="Предпросмотр" 
+                          fill
+                          className="object-contain"
+                        />
+                        {cropMode && cropStart && cropEnd && (
+                          <div 
+                            className="absolute border-2 border-amber-400 bg-amber-500/20"
+                            style={{
+                              left: `${Math.min(cropStart.x, cropEnd.x) * 100}%`,
+                              top: `${Math.min(cropStart.y, cropEnd.y) * 100}%`,
+                              width: `${Math.abs(cropEnd.x - cropStart.x) * 100}%`,
+                              height: `${Math.abs(cropEnd.y - cropStart.y) * 100}%`
+                            }}
+                          />
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-gray-900 border-t border-gray-700">
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCropMode(!cropMode)}
+                            className={`p-2 rounded-md text-sm flex items-center gap-1 ${cropMode ? 'bg-amber-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                          >
+                            <FaCrop size={14} /> {cropMode ? 'Отменить' : 'Обрезать'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={compressImage}
+                            className="p-2 rounded-md bg-gray-700 text-gray-300 hover:bg-gray-600 text-sm flex items-center gap-1"
+                          >
+                            <FaCompress size={14} /> Сжать
+                          </button>
+                          <button
+                            type="button"
+                            onClick={resetImage}
+                            className="p-2 rounded-md bg-gray-700 text-gray-300 hover:bg-gray-600 text-sm flex items-center gap-1"
+                          >
+                            <FaUndo size={14} /> Исходное
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPhotoPreview(null);
+                            setFormData(prev => ({ ...prev, photo: null }));
+                            setOriginalPhoto(null);
+                          }}
+                          className="p-2 rounded-md bg-red-600 text-white hover:bg-red-700"
+                        >
+                          ✕ Удалить
+                        </button>
+                      </div>
+                      {cropMode && (
+                        <div className="p-3 bg-amber-950/50 text-amber-300 text-sm">
+                          Кликните и перетащите, чтобы выделить область для обрезки
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    <div className="text-center p-6">
-                      <FaUpload className="mx-auto mb-2 text-gray-400" size={24} />
+                    <div className="text-center p-8 cursor-pointer" onClick={() => document.getElementById('photoUpload')?.click()}>
+                      <FaUpload className="mx-auto mb-3 text-gray-400" size={32} />
                       <p className="text-gray-400 mb-2">Нажмите для загрузки или перетащите файл</p>
                       <p className="text-gray-500 text-xs">JPG, PNG или GIF, максимум 5 МБ</p>
+                      {photoError && <p className="text-red-500 mt-2">{photoError}</p>}
                     </div>
                   )}
                   <input
+                    id="photoUpload"
                     type="file"
                     name="photo"
                     onChange={handlePhotoChange}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    className="hidden"
                     accept="image/*"
                   />
                 </div>
+                {!cropMode && photoPreview && (
+                  <div className="mt-2 bg-gray-800 p-3 rounded-md">
+                    <label className="block text-gray-300 mb-2 text-sm">Уровень сжатия: {Math.round(compressionLevel * 100)}%</label>
+                    <input
+                      type="range"
+                      min="10"
+                      max="100"
+                      value={compressionLevel * 100}
+                      onChange={(e) => setCompressionLevel(Number(e.target.value) / 100)}
+                      className="w-full"
+                    />
+                  </div>
+                )}
               </div>
               <div className="relative">
                 <label className="block text-gray-300 mb-2 text-sm">Краткое описание (подвиги, история)</label>

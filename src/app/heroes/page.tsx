@@ -1,12 +1,13 @@
+import React from 'react';
+import { Metadata } from 'next';
 import PageHeader from '@/components/ui/PageHeader';
 import HeroesSearch from '@/components/heroes/HeroesSearch';
-import HeroesGrid from '@/components/heroes/HeroesGrid';
-import HeroesAddForm from '@/components/heroes/HeroesAddForm';
+import AddHeroForm from '@/components/heroes/AddHeroForm';
 import { FaInfoCircle, FaUserShield, FaSync } from 'react-icons/fa';
 
-export const metadata = {
-  title: 'Галерея героев - Великая Отечественная Война',
-  description: 'Информация о героях Великой Отечественной Войны. Поиск по региону и населенному пункту. Возможность добавить информацию о своих родственниках-участниках войны.',
+export const metadata: Metadata = {
+  title: 'Герои Великой Отечественной Войны - Поиск и добавление',
+  description: 'Поиск информации о героях ВОВ и возможность добавить героя в нашу базу данных.',
 };
 
 // Скрипт для проверки localStorage
@@ -58,82 +59,20 @@ const HeroesPageScript = () => {
 
 export default function HeroesPage() {
   return (
-    <div className="pt-20">
-      <HeroesPageScript />
-      
+    <main className="container mx-auto px-4 py-8">
       <PageHeader 
-        title="Галерея героев" 
-        description="Истории о подвигах и доблести защитников Отечества"
-        bgImage=""
+        title="Герои Великой Отечественной Войны" 
+        description="Поиск и добавление информации о героях Великой Отечественной войны"
+        bgImage="/images/heroes-bg.jpg"
       />
       
-      <div className="container-custom mt-8">
-        <div className="bg-amber-950/30 border border-amber-900/50 rounded-lg p-4 mb-8 flex items-start gap-4">
-          <div className="text-amber-500 pt-1">
-            <FaSync size={20} />
-          </div>
-          <div>
-            <h3 className="text-amber-400 font-bold mb-1">Важно: Обновление информации</h3>
-            <p className="text-gray-300 text-sm mb-1">
-              После добавления героя необходимо <strong className="text-white bg-amber-700 px-2 py-0.5 rounded">обновить страницу</strong>, чтобы увидеть добавленную информацию в галерее.
-              Это требуется только в демо-версии сайта.
-            </p>
-            <p className="text-amber-500/80 text-xs">
-              В полной версии сайта информация будет обновляться автоматически после успешного добавления.
-            </p>
-            <a 
-              href="/heroes" 
-              className="mt-2 bg-amber-700 hover:bg-amber-600 text-white px-4 py-1 rounded-md text-sm flex items-center gap-2 inline-block w-fit"
-            >
-              <FaSync size={14} /> Обновить страницу сейчас
-            </a>
-          </div>
-        </div>
+      <div className="mt-8">
+        <HeroesSearch />
         
-        <div className="bg-blue-950/30 border border-blue-900/50 rounded-lg p-4 mb-8 flex items-start gap-4">
-          <div className="text-blue-500 pt-1">
-            <FaUserShield size={20} />
-          </div>
-          <div>
-            <h3 className="text-blue-400 font-bold mb-1">Политика модерации</h3>
-            <p className="text-gray-300 text-sm">
-              В полной версии сервиса все добавленные герои будут отображаться только у вас, 
-              пока не пройдут проверку модераторами. После успешной модерации данные станут доступны 
-              в общей галерее героев для всех пользователей.
-            </p>
-          </div>
-        </div>
-      
+        <div className="my-10 border-t border-gray-700"></div>
+        
+        <AddHeroForm />
       </div>
-      
-      <section className="py-16">
-        <div className="container-custom">
-          <div className="max-w-3xl mx-auto text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Найдите героя войны</h2>
-            <p className="text-gray-400">
-              Воспользуйтесь поиском, чтобы найти информацию о героях войны по региону или населенному пункту.
-            </p>
-          </div>
-          <HeroesSearch />
-        </div>
-      </section>
-      <section className="py-16 bg-card">
-        <div className="container-custom">
-          <h2 className="text-3xl font-bold mb-12 text-center">Герои Великой Отечественной Войны</h2>
-          <HeroesGrid />
-        </div>
-      </section>
-      <section className="py-16">
-        <div className="container-custom">
-          <div className="max-w-3xl mx-auto">
-            <h2 className="text-3xl font-bold mb-4 text-center">Добавить героя</h2>
-            <p className="text-gray-400 text-center mb-8">
-              Здесь вы можете добавить информацию о своих родственниках-участниках войны, чтобы сохранить память о них.
-            </p>
-            <HeroesAddForm />
-          </div>
-        </div>
-      </section>
-    </div>
+    </main>
   );
 } 
