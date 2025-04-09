@@ -56,6 +56,28 @@ const HeroesSearch: React.FC = () => {
   const [sortField, setSortField] = useState<SortField>('lastName');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   
+  // Функция для загрузки всех героев
+  const loadAllHeroes = async () => {
+    try {
+      setInitialLoading(true);
+      setError('');
+      
+      const response = await fetch('/api/heroes');
+      
+      if (!response.ok) {
+        throw new Error(`Ошибка запроса: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setHeroes(sortHeroes(data, sortField, sortOrder));
+    } catch (err) {
+      setError('Ошибка при загрузке героев: ' + (err instanceof Error ? err.message : String(err)));
+      console.error('Ошибка загрузки:', err);
+    } finally {
+      setInitialLoading(false);
+    }
+  };
+  
   // Загружаем всех героев при монтировании компонента
   useEffect(() => {
     loadAllHeroes();
@@ -86,28 +108,6 @@ const HeroesSearch: React.FC = () => {
     
     fetchSchools();
   }, []);
-  
-  // Функция для загрузки всех героев
-  const loadAllHeroes = async () => {
-    try {
-      setInitialLoading(true);
-      setError('');
-      
-      const response = await fetch('/api/heroes');
-      
-      if (!response.ok) {
-        throw new Error(`Ошибка запроса: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      setHeroes(sortHeroes(data, sortField, sortOrder));
-    } catch (err) {
-      setError('Ошибка при загрузке героев: ' + (err instanceof Error ? err.message : String(err)));
-      console.error('Ошибка загрузки:', err);
-    } finally {
-      setInitialLoading(false);
-    }
-  };
   
   // Функция для сортировки героев
   const sortHeroes = (heroList: Hero[], field: SortField, order: SortOrder): Hero[] => {

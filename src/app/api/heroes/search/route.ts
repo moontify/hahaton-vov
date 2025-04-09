@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
         entrypoint: "heroes/search",
         parameters: requestData.parameters
       }),
-      // @ts-ignore - игнорируем ошибку типа, так как fetch в Next.js немного отличается
+      // @ts-expect-error - игнорируем ошибку типа, так как fetch в Next.js немного отличается
       agent: httpsAgent
     });
 

@@ -17,7 +17,6 @@ export async function initDB() {
       console.log(`Попытка инициализации базы данных (${retryCount + 1}/${maxRetries})...`);
       
       // Создаем клиент Neon
-      // @ts-ignore - игнорируем ошибку типов, параметр не существует в типах
       const neonClient = neon(process.env.DATABASE_URL);
       const db = drizzle(neonClient);
       

@@ -7,7 +7,7 @@ import * as schema from './schema';
 neonConfig.fetchConnectionCache = true;
 // Попытаемся установить таймаут
 try {
-  // @ts-ignore - игнорируем ошибку типов для параметра, который может не существовать в типах
+  // @ts-expect-error - игнорируем ошибку типов для параметра, который может не существовать в типах
   neonConfig.fetchTimeout = 30000; // увеличиваем таймаут до 30 секунд
 } catch (e) {
   console.warn('Невозможно установить fetchTimeout для neonConfig');

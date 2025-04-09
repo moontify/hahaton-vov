@@ -96,7 +96,7 @@ export async function GET(request: Request) {
     const award = searchParams.get('award');
     const birthYear = searchParams.get('birthYear');
     
-    let filters = [];
+    const filters = [];
     
     // Добавляем фильтры, если они указаны
     if (lastName) {
