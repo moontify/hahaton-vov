@@ -132,7 +132,7 @@ export default function BotActivator() {
               onChange={handleIntervalChange}
               className="px-2 py-1 border rounded"
             >
-              <option value="5">5 секунд</option>
+              <option value="1">1 секунда</option>
               <option value="10">10 секунд</option>
               <option value="15">15 секунд</option>
               <option value="30">30 секунд</option>
